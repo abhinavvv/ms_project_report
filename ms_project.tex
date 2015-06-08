@@ -1,0 +1,478 @@
+%
+% File acl2014.tex
+%
+% Contact: koller@ling.uni-potsdam.de, yusuke@nii.ac.jp
+%%
+%% Based on the style files for ACL-2013, which were, in turn,
+%% Based on the style files for ACL-2012, which were, in turn,
+%% based on the style files for ACL-2011, which were, in turn, 
+%% based on the style files for ACL-2010, which were, in turn, 
+%% based on the style files for ACL-IJCNLP-2009, which were, in turn,
+%% based on the style files for EACL-2009 and IJCNLP-2008...
+
+%% Based on the style files for EACL 2006 by 
+%%e.agirre@ehu.es or Sergi.Balari@uab.es
+%% and that of ACL 08 by Joakim Nivre and Noah Smith
+
+\documentclass[12pt]{article}
+\usepackage{acl2014}
+\usepackage{times}
+\usepackage{url}
+\usepackage{latexsym}
+\usepackage{float,amsmath,tabularx,hhline}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage[inline]{enumitem}
+\usepackage[linewidth=1pt]{mdframed}
+\usepackage{lipsum}
+
+
+%\setlength\titlebox{5cm}
+
+% You can expand the titlebox if you need extra space
+% to show all the authors. Please do not make the titlebox
+% smaller than 5cm (the original size); we will check this
+% in the camera-ready version and ask you to change it back.
+
+
+\title{Extracting contingent event pairs from Travel and Sports stories}
+
+\author{Abhinav Venkataraman  \\
+  {\tt abhinav@soe.ucsc.edu} }
+ 
+
+\date{}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+	Script learning is one of the most challenging research topic in the field of NLP and many researchers have been tackling this problem by solving different sub domains of the same. One of such important sub domain is extraction of \texttt{CONTINGENT} relations between event pairs i.e deciding whether an event caused another event. There are different contingency measures in establishing this relation and this paper involves building different variations of a bigram language model for a variety of representations \cite{manshadi} and calculating different contingency measures as used in previous works \cite{film}. The quality of these measures and the extracted event pairs are evaluated based on experiments like Discriminate, Narrative Cloze and HIT jobs. Results show that an mixture of likelihood of adjacent events and events spanning over more than two events perform better than just the stand alone adjacent event measures. Also, different smoothening techniques can actually improve the performance of any contingency measure over the standard approach of adding one count to an unseen event pair. Interestingly enough, the result also shows how weak narrative cloze as an evaluation measure is.
+\end{abstract}
+
+
+\section{Introduction}
+
+A narrative story can be seen as a chain of ordered events. In order to learn them, its very important to understand the internal structure of the stories prevailing on different topics. More generally put, its important to figure out which action and its type characterizes the story belonging to a particular topic. Extracting contingent events is also a  prerequisite in many NLP tasks like text coherence, entailment, question answering and information retrieval\cite{cp}. This paper focuses on extracting them,in an unsupervised data driven fashion. Previous work shows good results in finding the contingent event pairs from film scenes by modeling the likelihood between events\cite{film}. \\
+\smallskip \\
+We feel trying to extract such causal chains from travel and sport may provide for better common sense reasoning and help in script learning for common scenarios about which people often blog. Also  trying out different event representations and determining the likelihood of events based on different smoothening techniques could help yield better quality and understanding of which components contribute to the discovery of the \texttt{CONTINGENT} relation between events. \\
+\smallskip \\
+\section{Related Works}
+Girju et al. focused on giving a statistical measure to the events that are in causal  relationship by defining causal potential\cite{cp}. Chambers et al. defined such events with causal relationships as narrative event chains and came out with different ways of learning \cite{nec}. They also build a new method of identifying event semantics that jointly learns event relations and their participants from unlabeled corpora\cite{cloze}. Chiacros solved the same problem by providing a method for identifying a discourse connective between different utterances in text\cite{chiacro}. Manshadi et al. tried to solve a similar problem by learning a probabilistic model of event sequences using statistical language modeling techniques\cite{manshadi}. Quang Xuan Do et al. followed Chiacros methodology of solving similar problem by feeding discourse connectives and the particular discourse relation in addition to the distributional similarity to identify causal relations between events\cite{do}\\
+\smallskip \\
+Our hypothesis and methodology is mostly a hybrid of Chao et al. and Manshadi et al. with certain differences. We create a variety of different event representations and bigram language models with different smoothening techniques. There is also a skipped language model thats built to capture \texttt{CONTINGENT} events spanning over more than two events. A mixture of both standard and skipped model is created and different possible computation of the above mentioned contingency measures are evaluated for sports and travel stories. We believe that the underlying assumption of temporal coherence and contingency do exist in these domains.  \\
+\medskip \\
+\section{Data}
+A sample story from our corpus: \\
+\begin{mdframed}
+	\small This morning my dad, uncle and I went for a short hike around the Short Hill. I had long known that part of the mountain was part of Harpers Ferry National Park, but only last week discovered access to the site . I told my dad about it and he was interested to check it out. Despite the cold drizzley weather we set out, being careful to not injure our selfs stepping into deep piles of leaves as I had the last time I visited the site. Almost immediately we encountered the ruins of an old lime kiln, which sadly I neglected to take a picture. A little further up the trail we came to the ruins of the old River Mill. We then made our way around the Short Hill on an old road bed, catching good views across and up river. That last pic was taken from a 60ft bluff above the river, and though you can't make it out in the picture, good views of Harpers Ferry 5 miles distant were had. Though the hike was short and we only stuck to the shore and did not attempt the mountain it was enjoyable and left me impatient for the spring when i can mount a full expedition of the area. Definitely going to need a machete because the undergrowth is going to be bad, good shoes and a hiking stick will also be necessary on the steep ungraded slopes. Check out my facebook for a few pics from the hike. 
+\end{mdframed} 
+\vspace{2em}
+The data consists of a number of blog stories divided into two major domains:  travel and sports. These stories were taken from The Internet Personal Story Archive\cite{ipsa} which is an  archive of blog posts scraped from the internet. Stories within each domain are also sub categorized into a number of fine grained topics like hiking, skiing, scuba diving etc. for travel and cricket, soccer, swimming for sports. These two domains were chosen because we think these two are characterized by a set of events that occur similarly in the experiences of different people. The corpus used consists of 353 stories for sports and 444 for travel.
+
+\section{Event Representations}
+
+There are different ways in which an event can be represented. At the core it is an action- a verb. There are other representations which give more information about the action which are : 
+\begin{enumerate*}[label=\itshape\alph*\upshape)]
+	\item Just the verb
+	\item Verb + Subject+Object
+	\item Verb + Subject
+	\item Verb + Object
+\end{enumerate*}. \\ 
+\\
+As an example the following sentence can be seen in any of the 4 forms:
+\begin{quote}
+	\textit{Ronaldo kicked the ball.}
+\end{quote}
+\begin{enumerate}
+	\item[a)] \textbf{Verb + Subj + Obj} : \textit{kick, Ronaldo, ball}.
+	\item[b)] \textbf{Verb + Subj} : \textit{kick, Ronaldo}
+	\item[c)] \textbf{Verb + Obj} : \textit{kick, ball}.
+	\item[d)] \textbf{Verb} : \textit{kick}
+\end{enumerate}
+
+Different representations might be helpful in different domains and this why we test them out for both the domains and see which representation is more informative in that context.
+
+So the corpus is converted to a form where each document is represented as a space delimited sequence of event representation. And different documents are delimited by a line break. \\
+So for an example document:
+\begin{quote}
+	\textit{John Doe opened the box. He ate the chocolates.}
+\end{quote}
+The above document would be represented in the following way in the different representations:
+\begin{enumerate}
+	\item[a)] \textbf{Verb + Subj + Obj}: open$|$\texttt{PERSON}$|$box eat$|$\texttt{PERSON}$|$chocolates.
+	\item[b)] \textbf{Verb + Subj} : open$|$\texttt{PERSON} $\ \ $ eat$|$\texttt{PERSON}.
+	\item[c)] \textbf{Verb + Obj} : open$|$box $\ \ $ eat$|$chocolates.
+	\item[d)] \textbf{Verb} : open $\ \ $ eat.
+\end{enumerate}
+
+\section{Contingency Measures}
+In this paper the simplest event representation is considered, which is just the action - verb and different contingency measures were computed which are explained below. \\
+\smallskip \\
+{\bf Probabilistic Language Models.}
+We build statistical language model using the events where we represent each document as a sequence of events\cite{manshadi}. We compute the bigram probabilities of verbs that occur in the document and it is defined as :
+\begin{equation}\label{prob_lm}
+p(w_i | w_{i-n+1}^{i-1}) =
+\begin{cases}
+p(w_i | w_{i-n+1}^{i-1}) &  \\
+ \;\;\;\;\; \text{ if } count(\tiny w_{i-n+1}^i) \geq 1 \\
+ \smallskip \\
+p(w_i | w_{i-n+2}^{i-1}).bow(w_{i-1}^{i-1n+1}), & \\
+ \;\;\;\;\;\;\;\;\; \text{otherwise} \\
+\end{cases}
+\end{equation}
+
+These bigram probabilities are computed using \texttt{SRI} toolkit and it uses a back off model which is $bow(w_{i-1}^{i-1n+1})$ for discounting unseen higher order probabilities with lower order ones as per equation (\ref{prob_lm}). \\
+
+There are many smoothening techniques available in the toolkit which is used to compute these unseen higher order probabilities and the ones considered for this paper are : 
+\begin{itemize}
+	\item Additive Smoothing(Add 1 smoothing)
+	\item Good Turing estimate
+	\item Kneser-Ney Smoothing
+\end{itemize}
+Additive smoothing is the simplest and traditional type of smoothing and add 1 smoothing is used in \cite{film}. In this kind of smoothing it is pretended that an event pair occurs once more than it actually does. This type smoothing generally performs poorly which is discussed more in results section. \\ 
+ Good Turing estimates is central smoothing technique do it is basically a way of performing normalization to bigram probabilities(normal likelihood) by finding a \textit{discount ratio}. Good Turing estimates fail because it
+ does not include the combination of higher-order models with lower-order models necessary for good performance. \\
+ Kneser-Ney Smoothing is an extension of absolute discounting where the lower order distribution and the higher order distribution are combined in a unique way and this is a standard example of back off model. \\
+The probability computed by \ref{prob_lm} is then used to calculate other contingency measures. \\
+
+{\bf Causal Potential.} A measure for causality was proposed by \cite{cp}. They define a manipulation test for annotators trying to judge if event A caused event B. 
+\begin{enumerate}
+	\item[(i)] Does event A occur before (or simultaneously) with event B?
+	\item[(ii)]  Keeping constant as many other states of affairs of the world in the given text context as possible, does modifying event A entail predictably modifying event B?
+\end{enumerate}
+Answering yes to both these questions would imply causality. \\
+\textbf{CP} is thus defined as :
+\begin{equation}
+\phi(e_1,e_2) = pmi(e_1,e_2) + \log\frac{p(e_1 \rightarrow e_2)}{ p(e_2 \rightarrow e_1)} 
+\end{equation}
+
+Here $pmi(e_1,e_2)$ is defined as \textit{Principal Mutual Information\(PMI\)} which is a symmetric measure of two events occurring adjacent to each other in a document and it is defined as: 
+\begin{equation}\label{pmi}
+pmi(e_1,e_2) = \log\frac{p(e_1,e_2)}{p(e_1)p(e_2)}
+\end{equation}
+in which $e_1$, $e_2$ are two events. $p(e_1)$ is the probability that event $e_1$ occur in corpus which is determined by equation (\ref{prob_lm}). \\
+
+In addition to this,one skip languages models are also built. The basic intuition behind this approach is to capture the \texttt{CONTINGENT} event pairs that span over more than one events. For eg, if a document is represented as a series of events $e_1, e_2, e_3, e_4$ and $e_5$ then we create a model considering $e_1, e_3, e_5$ as a sequence of events and $e_2, e_4$ as a sequence of another set of events. A language model following the this structure of event representation is created. We interpolate this model with the language model that was defined above for normal bi gram probabilities. \\
+Given a pair of events $e_1$ and $e_2$ present in both original language model and skipped model. The interpolated model is represented as : 
+\begin{equation}\label{weight}
+	\lambda p_{normal}(e_1,e_2) + (1-\lambda) p_{skipped}(e_1,e_2)
+\end{equation} 
+We tune the value for $\lambda$ for each of the different types of event representation over a development set. \\
+
+All words in the test data that were not present in the vocabulary of the language models were mapped to the symbol \textit{unk} which is already present in the language model and the probability is calculated based on that.
+
+
+\section{Experiment set up and Evaluation}
+In this paper, only one event representation is being focused and the experiments are run for only verbs alone event representation.
+\subsection{Evaluation}
+The major tasks used for evaluation are Discriminate, Narrative Cloze and Human Intelligence Tasks. We also use perplexity as an initial measure to find an estimate of how good the language models are.\\
+\subsubsection{Perplexity}
+Perplexity is one of the ways to evaluate language models over test data. It shows how surprised is the model in seeing a new event. Perplexity of a sentence is denoted by :
+\begin{equation}
+PP_p(S) = 2^{H_p(S)}
+\end{equation}
+where $H_p(S)$ is the cross entropy and its defined as :
+\begin{equation}
+H_p(S) = \frac{-1}{W_s} * \log_2 p(S)
+\end{equation}
+where $W_s$ is the number of words in the sentence in other words number of bits required to encode the sentence.  \\
+
+\subsubsection{Discriminate}
+In this task, random permutations of the events of a document are generated and it is seen if the language models assign a higher score to the random permutations or the original ordering of events. If the score of the original order of events are higher than the random permutations of events then its determined as a win otherwise its treated as a loss. In case the scores are the same, then its a tie : \\
+For each contingency measure, the desired property is : 
+\begin{itemize}
+	\item $\Sigma_{i=1}^{n-1}Org\_Order \ \phi(e_i,e_{i+1})   > \\ \Sigma_{i=1}^{n-1} Permuted\_Order \ \phi(e_i,e_{i+1})$
+	\item $\Sigma_{i=1}^{n-1}Org\_Order \ \log p(e_i,e_{i+1})   > \\ \Sigma_{i=1}^{n-1} Permuted\_Order \ \log p(e_i,e_{i+1})$
+\end{itemize}
+
+The goal of this evaluation is to compare the different contingency measures and different language models to see combination performs the best.  
+
+\subsubsection{Narrative Cloze}
+The cloze task\cite{cloze_proc} is used to evaluate a system (or human) for language proficiency by removing a random word from a sentence and having the system attempt to fill in the blank . Depending on the type of word removed, the test can evaluate syntactic knowledge as well as semantic\cite{nec}. Similarly, there is an event which is plucked out at each position in the document and it is rated by each of the contingency measure. The position rated best is taken to be the predicted position and we calculate the value delta (for each measure) as,
+\begin{equation}
+\delta = |actual\_position - predicted\_position|
+\end{equation}
+This delta value is averaged over the number of events in the corpus to get the Mean positional value per event and Mean positional value per document is calculate as :
+\begin{equation}
+	mean\_pos\_score =\frac{\sum_{i \in docs} avg_i}{n}
+\end{equation}
+where $n$ is the number of documents and $avg_i$ is defined as :
+\begin{equation}
+	avg_i  = \frac{\sum_{j \in events(i)} \delta_j}{length(i)}
+\end{equation}
+
+
+\subsection{Experiment set up}
+We use Stanford CoreNLP\cite{corenlp} toolkit to get the annotations. We feed into the parser the entire corpus of stories and yield corresponding XML files which contain necessary annotations. We parse the XML output to get the verbs in their lemmatized form, which are actions and also extract the subject and object of the verb from the dependency parse. We are trying to use the SRILM toolkit for getting the necessary counts and probabilities for each of these measures\cite{srilm}. \\
+The data in both the domains was divided in three parts:   train (85\%), development (5\%) and test (10\%). So for travel we have 378 stories for train, 44 for testing and 22 for development. And sports is split into – 300 train, 35 test and 17 for development.
+
+\section{Results and Discussion}
+We tuned the mixture model which is a linear combination of skip and the original model with the help of \ref{weight}. We ran them with $\lambda$ values ranging from 0 to 1 with a \textit{step size} of 0.01 to figure the best possible value for $\lambda$. The $\lambda$ values change for each representation and domain. For travel, the best possible $\lambda$ value was in the range of $0.77 - 0.82$ and for sports it was in the range of $0.75-0.85$. After tuning the mixture mode with the development set, we run the discriminate task on the original model as well as the mixture model for all the event representations on the with held test test. The tables below show the discriminate and cloze results of all the experiments. \\
+\subsection{Perplexity Results}
+\begin{table}[H]
+	\centering
+	\begin{tabular}{|c|c|}
+		\hline Representation  & Perplexity  \\ 
+		\hline V + S + O & 56.0863  \\ 
+		\hline  V+ S & 132.118 \\ 
+		\hline  V+ O & 72.486 \\ 
+		\hline  V & 87.374 \\ 
+		\hline 
+		\end{tabular} 
+		\caption{Initial perplexity results for Travel(67 stories)}
+		\end{table}
+		\begin{table}[H]
+			\centering
+			\begin{tabular}{|c|c|}
+				\hline Representation  & Perplexity  \\ 
+				\hline V + S + O & 54.9574  \\ 
+				\hline  V+ S & 141.279 \\ 
+				\hline  V+ O & 96.4696 \\ 
+				\hline  V & 95.1299 \\ 
+				\hline 
+				\end{tabular} 
+				\caption{Initial perplexity results for Sports(53 stories)}
+				\end{table}
+\subsection{Discriminate Results}
+\rule{0pt}{1ex}
+\begin{table}[H]
+\label{discriminate_travel}
+	\resizebox{0.5\textwidth}{!} {
+		\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|}
+
+			\hline
+			Model & Representation & \multicolumn{4}{ c| }{CP} & \multicolumn{4}{ c| }{logp} \\ 
+			\cline{3-10}
+			& & Wins & Losses & Ties & Win \% & Wins & Losses & Ties & Win \% \\
+			\hline
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Original} } &
+			\multicolumn{1}{ |c| }{V+S+O} & 164 & 56 & 5 & 75.11 & 178 & 42 & 5 & \textbf{81.3} \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 184 & 41 & 0 & 81.7 & 199 & 26 & 0 & \textbf{88.4} \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 194 & 24 & 6 & 88.8 & 202 & 17 & 6 & \textbf{92.4} \\ \cline{2-10}		
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 186 & 39 & 0 & \textbf{82.7} & 176 & 49 & 0 & 78.2 \\ 	\hhline{|=|=|=|=|=|=|=|=|=|=|=|}
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Combined} } &		
+			\multicolumn{1}{ |c| }{V+S+O} & 164  & 56 & 5 & 76 & 171 & 49 & 5 & \textbf{78.2}  \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 183 & 49 & 0 & \textbf{81.3} & 176 & 42 & 0 & 78.2 \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 184  & 36 & 5 & 84.9 & 192 & 28 & 5 & \textbf{87.6} \\ \cline{2-10}		
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 169 & 56 & 0 & \textbf{75.1} & 155 & 70 & 0 & 68.9 \\ \cline{1-10}	
+		\end{tabular}
+
+	}
+	\caption{Discriminate results for travel stories(225 samples)}
+\end{table}					
+
+\begin{table}[!ht]
+	\label{discriminate_sports}
+	\resizebox{0.5\textwidth}{!} {
+		\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|}
+			
+			\hline
+			Model & Representation & \multicolumn{4}{ c| }{CP} & \multicolumn{4}{ c| }{logp} \\ 
+			\cline{3-10}
+			& & Wins & Losses & Ties & Win \% & Wins & Losses & Ties & Win \% \\
+			\hline
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Original} } &
+			\multicolumn{1}{ |c| }{V+S+O} & 140 & 40 & 0 & 77.8 & 161 & 19 & 0 & \textbf{89.4} \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 158 & 22 & 0 & 87.8 & 168 & 12 & 0 & \textbf{93.3} \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 158 & 22 & 0 & 87.8 & 164 & 16 & 0 & \textbf{91.1} \\ \cline{2-10}		
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 153 & 27 & 0 & 85 & 165 & 15 & 0 & \textbf{91.7} \\ 	\hhline{|=|=|=|=|=|=|=|=|=|=|=|}
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Combined} } &		
+			\multicolumn{1}{ |c| }{V+S+O} & 134 & 46 & 0 & 74.4 & 157 & 23 & 0 & \textbf{87.2} \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 143 & 37 & 0 & 79.4 & 156 & 24 & 0 & \textbf{86.7} \\ \cline{2-10}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 151 & 29 & 0 & 83.9 & 157 & 23 & 0 & \textbf{87.2} \\ \cline{2-10}		
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 152 & 28 & 0 & 84.4 & 157 & 23 & 0 & \textbf{87.2} \\ \cline{1-10}	
+		\end{tabular}
+		
+	}
+	\caption{Discriminate results for sports stories(180 samples)}
+\end{table}					
+It is very evident from the table that the discriminate results of $\log p$ does better than CP. For travel, its interesting to see that CP for verbs does better than $\log p$ where as it relatively does bad when compared to $\log p$ for other representations. This could be because since there are a lot of \textit{unks}'s mapped in the representation which shows how sparse the representations are and that is impacts the difference in performance of discriminate. \\
+For sports, the $\log p$ simply outperforms CP in every representation which clearly shows CP is weaker for sports. \\
+
+\subsection{Cloze Results}
+We ran the cloze task from with the help of probabilities calculated for both mixture and original model. 
+\rule{0pt}{1ex}
+\begin{table}[H]
+	\label{cloze_travel}
+	\large
+	\resizebox{0.5\textwidth}{3em} {
+		\begin{tabular}{|c|c|c|c|c|c|c|c|}
+			
+			\hline
+			Model & Representation & \multicolumn{2}{ c| }{CP} & \multicolumn{2}{ c| }{PMI} & \multicolumn{2}{ c| }{logp} \\ 
+			\cline{3-8}
+			& & Mean by line & Mean by event & Mean by line & Mean by event & Mean by line & Mean by event \\
+			\hline
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Original} } &
+			\multicolumn{1}{ |c| }{V+S+O} & 9.775 & 12.668 & 9.589 & 12.680 & 9.727 & 12.838 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 9.535 & 11.909 & \textbf{8.619} & 10.645 & 9.224 & 11.539 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 10.332 & 12.180 & 9.258 & 10.789 & 9.592 & 11.169 \\ \cline{2-8}		
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 9.708 & 10.791 & 9.582 & 10.846 & \textbf{8.749} & 9.599 \\ 	\hhline{|=|=|=|=|=|=|=|=|}
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Combined} } &		
+			\multicolumn{1}{ |c| }{V+S+O} & 9.250 & 11.840 & 9.199 & 11.961 & 8.996 & 11.678 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 9.653 & 12.069 & \textbf{8.314} & 10.190 & 8.936 & 11.005 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 10.275 & 11.961 & 9.610 & 11.145 & 9.315 & 10.708 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 8.851 & 9.877 & 8.665 & 9.794 & \textbf{8.586} & \textbf{9.415} \\ \cline{1-8}
+		\end{tabular}
+		
+	}
+	\caption{Cloze results for travel stories}
+\end{table}		
+
+
+
+\begin{table}[H]
+	\label{cloze_sports}
+	\large
+	\resizebox{0.5\textwidth}{3em} {
+		\begin{tabular}{|c|c|c|c|c|c|c|c|}
+			
+			\hline
+			Model & Representation & \multicolumn{2}{ c| }{CP} & \multicolumn{2}{ c| }{PMI} & \multicolumn{2}{ c| }{logp} \\ 
+			\cline{3-8}
+			& & Mean by line & Mean by event & Mean by line & Mean by event & Mean by line & Mean by event \\
+			\hline
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Original} } &
+			\multicolumn{1}{ |c| }{V+S+O} & 12.789 & 13.373 & 11.796 & 12.413 & 13.983 & 15.153 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 13.351 & 14.555 & 12.810 & 13.905 & 13.320 & 14.207 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 12.869 & 13.462 & 12.925 & 13.573 & 12.057 & 12.951 \\ \cline{2-8}		
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 11.050 & 11.870 & 9.259 & 9.755 & 9.477 & 10.299 \\ 	\hhline{|=|=|=|=|=|=|=|=|}
+			\multicolumn{1}{ |c  }{\multirow{4}{*}{Combined} } &		
+			\multicolumn{1}{ |c| }{V+S+O} & 13.515 & 14.22 & 12.664 & 13.75 & 14.274 & 15.196 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+S} & 11.962 & 12.732 & 10.696 & 11.333 & 11.588 & 12.284 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V+O} & 12.488 & 13.088 & 11.853 & 12.333 & 10.758 & 11.373 \\ \cline{2-8}
+			\multicolumn{1}{ |c  }{} &
+			\multicolumn{1}{ |c| }{V} & 10.225 & 10.944 & 10.204 & 10.842 & \textbf{9.246} & \textbf{9.818} \\ \cline{1-8}
+		\end{tabular}
+		
+	}
+	\caption{Cloze results for sports stories}
+\end{table}				
+Verbs along with $\log p$ does best at performing the cloze task irrespective of the domain and CP performs the worst. \\
+\smallskip \\
+One common inference from both the tasks is that CP does not perform better than $\log p$ and Verbs in general has the highest expressive power, this could be because others get sparse since we tend to capture more information. \\
+\smallskip \\
+\section{Future Work}
+There are many variants of the task to ascertain some of the inferences made in the paper. One is to set up a Human Intelligence Task on Mechanical Turk. This would actually validate our results. As seen in the \cite{film} paper, the verbs alone representation did the best on MTurk and this matches to our inferences but we would need to validate it. \\
+\smallskip \\
+The other important task to do is to run the same procedure with more data, which is to get much cleaner data by using the patterns generated from AutoSlog\cite{auto_slog}. Doing such high precision extraction of stories would help us in getting to know more insight about the representations.
+ 
+
+% include your own bib file like this:
+%\bibliographystyle{acl}
+%\bibliography{acl2014}
+
+\begin{thebibliography}{}
+
+\bibitem[\protect\citename{Girju and Brandon}2009]{cp}
+Beamer, Brandon, and Roxana Girju,.
+\newblock 2009.
+\newblock {\em Using a bigram event model to predict causal potential}, 
+\newblock Computational Linguistics and Intelligent Text Processing
+\newblock Springer Berlin Heidelberg, 2009. 430-441
+
+	   
+\bibitem[\protect\citename{Chambers and Jurafsky}2008]{nec}
+	Chambers, Nathanael, and Daniel Jurafsky,
+	\newblock 2008.
+	\newblock{\em Unsupervised Learning of Narrative Event Chains. }
+	  ACL. Vol. 94305.
+
+\bibitem[\protect\citename{Chambers and Jurafsky}2009]{cloze}
+	Chambers, Nathanael, and Dan Jurafsky,
+	\newblock 2009
+	\newblock{\em Unsupervised learning of narrative schemas and their participants}
+	\newblock In Proceedings of the Joint Conference of the 47th Annual Meeting of the ACL and the 4th International Joint Conference on Natural Language Processing of the AFNLP
+	  \newblock Volume 2-Volume 2, pp. 602-610,Association for Computational Linguistics
+
+\bibitem[\protect\citename{Chiarcos} 2012]{chiacro}
+	Chiarcos, Christian.,
+	\newblock 2012,
+	\newblock{\em Towards the unsupervised acquisition of discourse relations},
+	\newblock  Proceedings of the 50th Annual Meeting of the Association for Computational Linguistics: Short Papers-Volume 2,
+	\newblock Association for Computational Linguistics.
+
+	
+\bibitem[\protect\citename{Manshadi et al.}2008]{manshadi}
+	Manshadi, Mehdi, Reid Swanson, and Andrew S. Gordon,
+	\newblock 2008,
+	\newblock{\em Learning a Probabilistic Model of Event Sequences from Internet Weblog Stories},
+	 \newblock FLAIRS Conference. 2008.
+
+\bibitem[\protect\citename{Do et al.}2011]{do}
+	Do, Quang Xuan, Yee Seng Chan, and Dan Roth.
+	\newblock 2011,
+	\newblock{\em Minimally supervised event causality identification},
+	 \newblock Proceedings of the Conference on Empirical Methods in Natural Language Processing. 
+	 \newblock Association for Computational Linguistics.
+	 
+\bibitem[\protect\citename{Chao et al.}2013]{film}
+	Hu, Zhichao and Rahimtoroghi, Elahe and Munishkina, Larissa and Swanson, Reid and Walker, Marilyn A.,,
+	\newblock  October, 2013.
+	\newblock{\em Unsupervised Induction of Contingent Event Pairs from Film Scenes.}
+	\newblock In Conference on Empirical Methods in Natural Language Processing,
+	\newblock Seattle, WA
+	 
+\bibitem[\protect\citename{Pichotta and Mooney}2014]{mooney}
+	Pichotta, Karl, and Raymond J. Mooney.
+	\newblock 2014.
+	 \newblock{\em Statistical script learning with multi-argument events}
+	 \newblock EACL(2014), 220.
+	  
+\bibitem[\protect\citename{Reid,}2007]{ipsa}
+  	Reid Swanson,
+  	\newblock 2007,
+  	\newblock{\em First Person Narrative Story Extraction and Retrieval. Masters}, 
+  	\newblock University of Southern California.
+  
+\bibitem[\protect\citename{Manning et al.}2014]{corenlp}
+	Manning, Christopher D. and  Surdeanu, Mihai  and  Bauer, John  and  Finkel, Jenny  and  Bethard, Steven J. and  McClosky, David,
+	\newblock June 2014.
+	\newblock{\em The {Stanford} {CoreNLP} Natural Language Processing Toolkit},
+	\newblock Proceedings of 52nd Annual Meeting of the Association for Computational Linguistics: System Demonstrations,
+	\newblock Baltimore, Maryland
+
+\bibitem[\protect\citename{Stolcke}]{srilm}
+	A. Stolcke,
+	\newblock{\em SRILM -- An Extensible Language Modeling Toolkit},
+	\newblock Proc. Intl. Conf. on Spoken Language Processing,
+	\newblock vol. 2, pp. 901-904, Denver.
+
+\bibitem[\protect\citename{Taylor,}1953]{cloze_proc}
+Taylor, Wilson L,
+\newblock{\em "Cloze procedure": a new tool for measuring readability},
+\newblock Journalism quarterly.
+
+\bibitem[\protect\citename{Riloff}1999]{auto_slog}
+Riloff, Ellen.,
+\newblock 1999,
+\newblock{\em "Information extraction as a stepping stone toward story understanding."},
+\newblock Understanding language understanding: Computational models of reading,435-460.
+
+
+\end{thebibliography}
+
+\end{document}
